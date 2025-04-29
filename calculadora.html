@@ -29,7 +29,7 @@
     #form-container {
       margin-bottom: 20px;
     }
-    /* Contêiner para a seleção do "mostrar total de juros pagos" */
+    /* Contêiner para a caixa de seleção - alinhado à esquerda */
     #select-container {
       display: flex;
       align-items: center;
@@ -167,17 +167,17 @@
   </table>
   
   <script>
-    // Converte valor formatado ("1.234,56") em número (1234.56)
+    // Função auxiliar para converter valor formatado ("1.234,56") em número (1234.56)
     function parseNumberFromMask(value) {
       return parseFloat(value.replace(/\./g, '').replace(',', '.'));
     }
 
-    // Formata número para o padrão de moeda brasileira (ex: 1.234,56)
+    // Função para formatar número para o padrão de moeda brasileira (ex.: 1.234,56)
     function formatCurrency(value) {
       return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // Aplica formatação aos campos Valor Financiado e Taxa de Juros (evento blur)
+    // Aplica formatação aos campos "Valor Financiado" e "Taxa de Juros" no evento blur
     document.getElementById("valor").addEventListener("blur", function() {
       let num = parseNumberFromMask(this.value);
       if (!isNaN(num)) this.value = formatCurrency(num);
@@ -208,7 +208,7 @@
         return;
       }
 
-      // Converte a taxa para mensal, se necessário
+      // Converte a taxa para mensal se for anual
       let taxa;
       if (tipoTaxa === "anual") {
         taxa = Math.pow(1 + taxaInput / 100, 1 / 12) - 1;
@@ -219,7 +219,7 @@
       /* Cálculo do IOF:
          - IOF fixo de 0,38% (0.0038)
          - IOF diário: 0,0082% para PF ou 0,0041% para PJ, aplicado até 365 dias.
-         Assume-se 30 dias por mês para o prazo total.
+         Considera-se 30 dias por mês para o prazo total.
       */
       let totalDiasFinanciamento = Math.min(prazo * 30, 365);
       let dailyRateIOF = (tipoPessoa === "pf") ? 0.000082 : 0.000041;
@@ -229,7 +229,7 @@
       let parcelas = [];
       let mes = 1;
       
-      // Cálculo refinado do período de carência em dias (convertendo em "parcelas de carência")
+      // Cálculo refinado do período de carência em dias – convertendo em parcelas de carência para o cálculo da tabela
       let graceInstallments = [];
       let remainingGraceDays = graceDays;
       while (remainingGraceDays >= 30) {
@@ -296,12 +296,13 @@
       }
       
       let totalJuros = parcelas.reduce((acc, parcela) => acc + parcela.juros, 0);
-
-      // Calcula o prazo das parcelas (sempre considerando 30 dias por mês) e o prazo total
-      let prazoParcelasDias = restantes * 30;
-      let prazoTotalDias = graceDays + prazoParcelasDias;
       
-      // Monta o resumo, incluindo a taxa com periodicidade e o prazo total (em dias)
+      // Calcular o prazo total:
+      // Prazo das parcelas (em dias) é sempre: prazo * 30
+      let prazoParcelasDias = prazo * 30;
+      let prazoTotalDias = graceDays + prazoParcelasDias;  // soma do prazo de carência e prazo das parcelas
+      
+      // Monta o resumo da simulação, incluindo a taxa com periodicidade e o prazo total com detalhes
       let resumo = `<h2>Resumo da Simulação</h2>
                     <p><strong>Valor Financiado:</strong> R$ ${formatCurrency(valor)}</p>
                     <p><strong>Taxa de Juros:</strong> ${formatCurrency(taxaInput)}% ${tipoTaxa === "mensal" ? "a.m." : "a.a."}</p>
@@ -309,16 +310,14 @@
                     <p><strong>Sistema Escolhido:</strong> ${sistema === "price" ? "PRICE" : "SAC"}</p>
                     <p><strong>Total de Parcelas:</strong> ${prazo}</p>
                     <p><strong>Período de Carência:</strong> ${graceDays} dia(s) (${totalGraceInstallments} parcela(s) de carência)</p>
-                    <p><strong>Prazo Total:</strong> ${prazoTotalDias} dia(s)</p>
+                    <p><strong>Prazo Total:</strong> ${prazoTotalDias} dia(s) (${prazo} parcelas + ${graceDays} dias de carência)</p>
                     <p><strong>Tipo de Pessoa:</strong> ${tipoPessoa === "pf" ? "Pessoa Física" : "Pessoa Jurídica"}</p>`;
       
-      // Se a seleção indicar "Sim", exibe o total de juros pagos
       if (document.getElementById("mostrarJurosTotal").value === "sim") {
         resumo += `<p><strong>Total de Juros Pagos:</strong> R$ ${formatCurrency(totalJuros)}</p>`;
       }
       
-      // Insere as Informações Adicionais, se preenchidas
-      if(infoAdicional.trim() !== ""){
+      if (infoAdicional.trim() !== "") {
         resumo += `<p><strong>Informações Adicionais:</strong> ${infoAdicional}</p>`;
       }
       
