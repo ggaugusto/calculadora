@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulador de Financiamento: PRICE e SAC</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f8f8f8;
+      color: #333;
+    }
+    h1 {
+      color: #00539C;
+    }
+    label {
+      font-weight: bold;
+      margin-right: 5px;
+    }
+    input, select, textarea {
+      padding: 5px;
+      margin: 5px 0;
+      width: 100%;
+      max-width: 300px;
+      box-sizing: border-box;
+    }
+    /* Contêiner para o formulário - será oculto na impressão */
+    #form-container {
+      margin-bottom: 20px;
+    }
+    /* Contêiner para a caixa de seleção - alinhado à esquerda */
+    #select-container {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      margin-top: 10px;
+      width: 100%;
+      max-width: 300px;
+    }
+    /* Contêiner para posicionar os botões em linha - também será oculto na impressão */
+    #buttons-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      background: #00539C;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    #resultado {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 15px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 15px;
+    }
+    table, th, td {
+      border: 1px solid #ccc;
+    }
+    th, td {
+      padding: 8px;
+      text-align: center;
+    }
+    /* Regras para impressão: ocultar o formulário e os botões */
+    @media print {
+      #form-container, #buttons-container {
+        display: none !important;
+      }
+      body {
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Simulador de Financiamento</h1>
+  
+  <!-- Contêiner do Formulário -->
+  <div id="form-container">
+    <div>
+      <label for="valor">Valor Financiado:</label>
+      <input type="text" id="valor" placeholder="Ex: 100.000,00">
+    </div>
+    <div>
+      <label for="taxa">Taxa de Juros (%) :</label>
+      <input type="text" id="taxa" placeholder="Ex: 1,50">
+    </div>
+    <div>
+      <label for="tipoTaxa">Tipo de Taxa:</label>
+      <select id="tipoTaxa">
+        <option value="mensal" selected>Mensal</option>
+        <option value="anual">Anual</option>
+      </select>
+    </div>
+    <div>
+      <label for="prazo">Prazo (meses):</label>
+      <input type="number" id="prazo" placeholder="Ex: 60">
+    </div>
+    <div>
+      <label for="grace">Período de Carência (dias):</label>
+      <input type="number" id="grace" placeholder="Ex: 90" value="0">
+    </div>
+    <div>
+      <label for="tipoPessoa">Tipo de Pessoa:</label>
+      <select id="tipoPessoa">
+        <option value="pf" selected>Pessoa Física</option>
+        <option value="pj">Pessoa Jurídica</option>
+      </select>
+    </div>
+    <div>
+      <label for="sistema">Sistema:</label>
+      <select id="sistema">
+        <option value="price" selected>PRICE</option>
+        <option value="sac">SAC</option>
+      </select>
+    </div>
+    <!-- Nova caixa de seleção para mostrar total de juros pagos -->
+    <div id="select-container">
+      <label for="mostrarJurosTotal">Mostrar total de juros pagos:</label>
+      <select id="mostrarJurosTotal">
+        <option value="sim">Sim</option>
+        <option value="nao" selected>Não</option>
+      </select>
+    </div>
+    <!-- Campo Informações Adicionais -->
+    <div>
+      <label for="infoAdicional">Informações Adicionais:</label>
+      <textarea id="infoAdicional" rows="4" placeholder="Digite informações adicionais..."></textarea>
+    </div>
+  </div>
+  
+  <!-- Contêiner dos Botões -->
+  <div id="buttons-container">
+    <button onclick="calcularParcelas()">Simular</button>
+    <button onclick="novoCalculo()">Novo Cálculo</button>
+    <button onclick="window.print()">Imprimir</button>
+  </div>
+  
+  <!-- Área de Resultado -->
+  <div id="resultado"></div>
+  
+  <!-- Tabela de Parcelas -->
+  <table id="tabelaParcelas" style="display: none;">
+    <thead>
+      <tr>
+        <th>Mês</th>
+        <th>Pagamento</th>
+        <th>Amortização</th>
+        <th>Juros</th>
+        <th>Saldo Devedor</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  
+  <script>
+    // Converte valor formatado ("1.234,56") em número (1234.56)
+    function parseNumberFromMask(value) {
+      return parseFloat(value.replace(/\./g, '').replace(',', '.'));
+    }
+
+    // Formata número no padrão de moeda brasileira (ex: 1.234,56)
+    function formatCurrency(value) {
+      return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // Aplica formatação aos campos Valor Financiado e Taxa de Juros ao perder o foco (blur)
+    document.getElementById("valor").addEventListener("blur", function() {
+      let num = parseNumberFromMask(this.value);
+      if (!isNaN(num)) this.value = formatCurrency(num);
+    });
+    document.getElementById("taxa").addEventListener("blur", function() {
+      let num = parseNumberFromMask(this.value);
+      if (!isNaN(num)) this.value = formatCurrency(num);
+    });
+
+    function calcularParcelas() {
+      document.getElementById("resultado").innerHTML = "";
+      let tabela = document.getElementById("tabelaParcelas");
+      let tbody = tabela.querySelector("tbody");
+      tbody.innerHTML = "";
+      tabela.style.display = "none";
+
+      let valor = parseNumberFromMask(document.getElementById("valor").value);
+      let taxaInput = parseNumberFromMask(document.getElementById("taxa").value);
+      let tipoTaxa = document.getElementById("tipoTaxa").value;
+      let prazo = parseInt(document.getElementById("prazo").value);
+      let graceDays = parseInt(document.getElementById("grace").value);
+      let tipoPessoa = document.getElementById("tipoPessoa").value;
+      let sistema = document.getElementById("sistema").value;
+      let infoAdicional = document.getElementById("infoAdicional").value;
+
+      if (isNaN(valor) || isNaN(taxaInput) || isNaN(prazo) || isNaN(graceDays)) {
+        alert("Por favor, preencha corretamente todos os campos numéricos.");
+        return;
+      }
+
+      // Converte a taxa para mensal se o tipo informado for anual
+      let taxa;
+      if (tipoTaxa === "anual") {
+        taxa = Math.pow(1 + taxaInput / 100, 1 / 12) - 1;
+      } else {
+        taxa = taxaInput / 100;
+      }
+      
+      /* Cálculo do IOF:
+         - IOF fixo de 0,38% (0.0038)
+         - IOF diário: 0,0082% para PF ou 0,0041% para PJ, aplicado até 365 dias.
+         Considera-se 30 dias por mês para o prazo total.
+      */
+      let totalDiasFinanciamento = Math.min(prazo * 30, 365);
+      let dailyRateIOF = (tipoPessoa === "pf") ? 0.000082 : 0.000041;
+      let iofTotal = valor * (0.0038 + dailyRateIOF * totalDiasFinanciamento);
+      
+      let saldoDevedor = valor;
+      let parcelas = [];
+      let mes = 1;
+
+      // Cálculo refinado do período de carência em dias
+      let graceInstallments = [];
+      let remainingGraceDays = graceDays;
+      while (remainingGraceDays >= 30) {
+        let jurosFullMonth = saldoDevedor * taxa;
+        graceInstallments.push(jurosFullMonth);
+        remainingGraceDays -= 30;
+      }
+      if (remainingGraceDays > 0) {
+        let dailyTaxa = Math.pow(1 + taxa, 1 / 30) - 1;
+        let jurosPartial = saldoDevedor * (Math.pow(1 + dailyTaxa, remainingGraceDays) - 1);
+        graceInstallments.push(jurosPartial);
+      }
+      
+      let totalGraceInstallments = graceInstallments.length;
+      if (totalGraceInstallments > prazo) {
+        alert("O período de carência (convertido em parcelas) não pode ser maior que o prazo total.");
+        return;
+      }
+      
+      graceInstallments.forEach(function(juros) {
+        parcelas.push({
+          mes: mes,
+          pagamento: juros,
+          amortizacao: 0,
+          juros: juros,
+          saldo: saldoDevedor
+        });
+        mes++;
+      });
+      
+      let restantes = prazo - totalGraceInstallments;
+
+      if (sistema === "price") {
+        let parcelaFixa = saldoDevedor * (taxa * Math.pow(1 + taxa, restantes)) / (Math.pow(1 + taxa, restantes) - 1);
+        for (let i = 0; i < restantes; i++) {
+          let juros = saldoDevedor * taxa;
+          let amortizacao = parcelaFixa - juros;
+          saldoDevedor -= amortizacao;
+          if (saldoDevedor < 0.01) saldoDevedor = 0;
+          parcelas.push({
+            mes: mes,
+            pagamento: parcelaFixa,
+            amortizacao: amortizacao,
+            juros: juros,
+            saldo: saldoDevedor
+          });
+          mes++;
+        }
+      } else if (sistema === "sac") {
+        let amortizacaoConst = saldoDevedor / restantes;
+        for (let i = 0; i < restantes; i++) {
+          let juros = saldoDevedor * taxa;
+          let pagamento = amortizacaoConst + juros;
+          saldoDevedor -= amortizacaoConst;
+          if (saldoDevedor < 0.01) saldoDevedor = 0;
+          parcelas.push({
+            mes: mes,
+            pagamento: pagamento,
+            amortizacao: amortizacaoConst,
+            juros: juros,
+            saldo: saldoDevedor
+          });
+          mes++;
+        }
+      }
+      
+      let totalJuros = parcelas.reduce((acc, parcela) => acc + parcela.juros, 0);
+
+      // Monta o resumo da simulação, incluindo a taxa e sua periodicidade
+      let resumo = `<h2>Resumo da Simulação</h2>
+                    <p><strong>Valor Financiado:</strong> R$ ${formatCurrency(valor)}</p>
+                    <p><strong>Taxa de Juros:</strong> ${formatCurrency(taxaInput)}% ${tipoTaxa === "mensal" ? "a.m." : "a.a."}</p>
+                    <p><strong>IOF:</strong> R$ ${formatCurrency(iofTotal)}</p>
+                    <p><strong>Sistema Escolhido:</strong> ${sistema === "price" ? "PRICE" : "SAC"}</p>
+                    <p><strong>Total de Parcelas:</strong> ${prazo}</p>
+                    <p><strong>Período de Carência:</strong> ${graceDays} dia(s) (${totalGraceInstallments} parcela(s) de carência)</p>
+                    <p><strong>Tipo de Pessoa:</strong> ${tipoPessoa === "pf" ? "Pessoa Física" : "Pessoa Jurídica"}</p>`;
+      
+      // Exibe o total de juros se o usuário selecionar "Sim" na caixa de seleção
+      if (document.getElementById("mostrarJurosTotal").value === "sim") {
+        resumo += `<p><strong>Total de Juros Pagos:</strong> R$ ${formatCurrency(totalJuros)}</p>`;
+      }
+      
+      // Inclui as Informações Adicionais, se houver texto
+      if(infoAdicional.trim() !== ""){
+        resumo += `<p><strong>Informações Adicionais:</strong> ${infoAdicional}</p>`;
+      }
+      
+      document.getElementById("resultado").innerHTML = resumo;
+      tabela.style.display = "table";
+      parcelas.forEach(function(parcela) {
+        let row = tbody.insertRow();
+        let cellMes = row.insertCell(0);
+        let cellPg = row.insertCell(1);
+        let cellAmort = row.insertCell(2);
+        let cellJuros = row.insertCell(3);
+        let cellSaldo = row.insertCell(4);
+        cellMes.innerText = parcela.mes;
+        cellPg.innerText = "R$ " + formatCurrency(parcela.pagamento);
+        cellAmort.innerText = "R$ " + formatCurrency(parcela.amortizacao);
+        cellJuros.innerText = "R$ " + formatCurrency(parcela.juros);
+        cellSaldo.innerText = "R$ " + formatCurrency(parcela.saldo);
+      });
+    }
+    
+    function novoCalculo() {
+      document.getElementById("valor").value = "";
+      document.getElementById("taxa").value = "";
+      document.getElementById("tipoTaxa").value = "mensal";
+      document.getElementById("prazo").value = "";
+      document.getElementById("grace").value = "0";
+      document.getElementById("tipoPessoa").value = "pf";
+      document.getElementById("sistema").value = "price";
+      document.getElementById("infoAdicional").value = "";
+      
+      document.getElementById("resultado").innerHTML = "";
+      let tabela = document.getElementById("tabelaParcelas");
+      let tbody = tabela.querySelector("tbody");
+      tbody.innerHTML = "";
+      tabela.style.display = "none";
+    }
+  </script>
+</body>
+</html>
